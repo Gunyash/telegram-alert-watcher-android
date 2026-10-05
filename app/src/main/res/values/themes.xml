@@ -1,0 +1,11 @@
+<resources>
+    <color name="alarm_red">#FFD50000</color>
+    <color name="ic_launcher_background">#FFD50000</color>
+
+    <style name="Theme.AlertWatcher" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Красный фон сразу при запуске, ещё до отрисовки Compose -->
+    <style name="Theme.AlertWatcher.Alarm" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/alarm_red</item>
+    </style>
+</resources>

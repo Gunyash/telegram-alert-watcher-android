@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Alert Watcher</string>
+    <string name="listener_label">Alert Watcher: чтение уведомлений Telegram</string>
+</resources>

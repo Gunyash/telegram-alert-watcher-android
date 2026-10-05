@@ -1,0 +1,46 @@
+{
+  "_comment": "Пример файла настроек для импорта в приложение (Настройки → Импорт config.json). Формат совместим с config.json от версии для ПК: можно импортировать и его — недостающие поля возьмутся из текущих настроек.",
+
+  "_comment_chats": "Точные названия чатов Telegram, как в шапке чата. На ПК чат задавался ID в secrets.json — на телефоне вместо этого название.",
+  "target_chats": [
+    "Zabbix Alerts"
+  ],
+
+  "alert_patterns": [
+    "#PROBLEM\\b",
+    "🔴",
+    "\\bALERT\\b",
+    "\\bCRITICAL\\b",
+    "\\bDOWN\\b",
+    "\\bFAILED\\b"
+  ],
+
+  "ignore_patterns": [
+    "(?=[\\s\\S]*#OK\\b)",
+    "🟢",
+    "(?=[\\s\\S]*Problem has been resolved)",
+    "(?=[\\s\\S]*\\bRESOLVED\\b)",
+    "(?=[\\s\\S]*Host: example-host\\b)(?=[\\s\\S]*Disk space is low)"
+  ],
+  "_comment_ignore_example": "Последнее правило — пример «игнорировать, только если в сообщении есть ОБА фрагмента»: (?=[\\s\\S]*первый)(?=[\\s\\S]*второй). Замените на свои значения или удалите.",
+
+  "_comment_connection": "Как на ПК, плюс check_url (куда стучаться при проверке) и keep_cpu_awake (проверять и в глубоком сне, ценой батареи).",
+  "connection_monitor": {
+    "enabled": true,
+    "check_interval_sec": 15,
+    "check_timeout_sec": 10,
+    "fail_threshold": 3,
+    "realert_interval_sec": 600,
+    "check_url": "https://api.telegram.org",
+    "keep_cpu_awake": false
+  },
+
+  "max_volume": true,
+  "vibrate": true,
+  "telegram_packages": [
+    "org.telegram.messenger",
+    "org.telegram.messenger.web",
+    "org.telegram.messenger.beta",
+    "org.thunderdog.challegram"
+  ]
+}
