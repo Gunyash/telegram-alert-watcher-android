@@ -47,6 +47,7 @@ import com.alertwatcher.AppLog
 import com.alertwatcher.AppState
 import com.alertwatcher.alarm.AlarmController
 import com.alertwatcher.alarm.AlarmEvent
+import com.alertwatcher.config.AppConfig
 import com.alertwatcher.config.ConfigStore
 import com.alertwatcher.notify.TelegramNotificationListener
 import com.alertwatcher.service.ConnectionMonitor
@@ -150,8 +151,8 @@ fun StatusTab(onOpenSettings: () -> Unit) {
                 ok = checks.postNotifications,
                 title = "2. Показ уведомлений",
                 description = "Нужно для красного экрана на заблокированном телефоне и значка работы.",
-                action = "Разрешить" to {
-                    if (askedNotifications) {
+                action = (if (checks.postNotifications) "Открыть" else "Разрешить") to {
+                    if (checks.postNotifications || askedNotifications) {
                         SystemChecks.openAppNotificationSettings(context)
                     } else {
                         askedNotifications = true
@@ -173,7 +174,13 @@ fun StatusTab(onOpenSettings: () -> Unit) {
             title = "4. Без ограничений батареи",
             description = "Чтобы Android не усыплял приложение. На Xiaomi/Huawei/Samsung также " +
                 "включите автозапуск и режим «Без ограничений» в настройках батареи для приложения.",
-            action = "Разрешить" to { SystemChecks.requestBatteryUnrestricted(context) },
+            // Когда уже разрешено, системный запрос ничего не покажет — ведём в
+            // «Сведения о приложении», где есть раздел батареи (и автозапуск на Xiaomi и т.п.).
+            action = if (checks.batteryUnrestricted) {
+                "Открыть" to { SystemChecks.openAppDetails(context) }
+            } else {
+                "Разрешить" to { SystemChecks.requestBatteryUnrestricted(context) }
+            },
         )
         CheckRow(
             ok = checks.overlay,
@@ -192,7 +199,12 @@ fun StatusTab(onOpenSettings: () -> Unit) {
                 "Найден: ${checks.installedTelegram.joinToString()}. В Telegram у нужного чата должны быть " +
                     "включены уведомления (можно без звука), а в настройках уведомлений — «Показывать текст»."
             },
-            action = null,
+            action = checks.installedTelegram.firstOrNull()?.let { pkg ->
+                "Уведомления Telegram" to { SystemChecks.openAppNotificationSettings(context, pkg) }
+            } ?: ("Установить" to { SystemChecks.openStore(context, AppConfig.DEFAULT_TELEGRAM_PACKAGES.first()) }),
+            secondary = checks.installedTelegram.firstOrNull()?.let { pkg ->
+                "Открыть Telegram" to { SystemChecks.launchApp(context, pkg) }
+            },
         )
         CheckRow(
             ok = config.targetChats.isNotEmpty(),
@@ -263,7 +275,9 @@ private fun CheckRow(
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold)
                 Text(description, style = MaterialTheme.typography.bodySmall)
-                if (!ok && (action != null || secondary != null)) {
+                // Кнопки показываем всегда, а не только пока пункт не выполнен:
+                // чтобы можно было проверить или поменять настройку и после ✅.
+                if (action != null || secondary != null) {
                     Row {
                         action?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(label) } }
                         secondary?.let { (label, onClick) -> TextButton(onClick = onClick) { Text(label) } }

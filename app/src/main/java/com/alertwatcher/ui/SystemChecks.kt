@@ -61,11 +61,22 @@ object SystemChecks {
         open(context, detailed, Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
     }
 
-    fun openAppNotificationSettings(context: Context) = open(
+    /** Настройки уведомлений приложения [pkg] (по умолчанию — нашего, но можно и Telegram). */
+    fun openAppNotificationSettings(context: Context, pkg: String = context.packageName) = open(
         context,
         Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName),
-        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri(context)),
+            .putExtra(Settings.EXTRA_APP_PACKAGE, pkg),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$pkg")),
+    )
+
+    fun launchApp(context: Context, pkg: String) =
+        open(context, context.packageManager.getLaunchIntentForPackage(pkg), null)
+
+    /** Страница приложения в Google Play (или на сайте Play, если магазина нет). */
+    fun openStore(context: Context, pkg: String) = open(
+        context,
+        Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")),
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$pkg")),
     )
 
     fun openFullScreenIntentSettings(context: Context) = open(
