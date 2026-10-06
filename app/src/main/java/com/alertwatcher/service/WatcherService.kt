@@ -73,13 +73,16 @@ class WatcherService : Service() {
 
         // Перезапуск мониторинга связи при изменении его настроек.
         scope.launch {
-            ConfigStore.config.map { it.connectionMonitor }.distinctUntilChanged().collect { cfg ->
-                monitorJob?.cancel()
-                setWakeLock(cfg.enabled && cfg.keepCpuAwake)
-                monitorJob = scope.launch(Dispatchers.Default) {
-                    ConnectionMonitor.run(applicationContext, cfg)
+            ConfigStore.config
+                .map { it.connectionMonitor to ConnectionMonitor.targets(it) }
+                .distinctUntilChanged()
+                .collect { (cfg, targets) ->
+                    monitorJob?.cancel()
+                    setWakeLock(targets.isNotEmpty() && cfg.keepCpuAwake)
+                    monitorJob = scope.launch(Dispatchers.Default) {
+                        ConnectionMonitor.run(applicationContext, cfg, targets)
+                    }
                 }
-            }
         }
 
         // Обновление текста постоянного уведомления.
@@ -125,8 +128,8 @@ class WatcherService : Service() {
     private fun statusText(): Pair<String, String> {
         val cfg = ConfigStore.config.value
         val sources = listOfNotNull(
-            "Telegram".takeIf { cfg.targetChats.isNotEmpty() },
-            "Mattermost".takeIf { cfg.mattermostChannels.isNotEmpty() },
+            "Telegram".takeIf { cfg.telegramEnabled && cfg.targetChats.isNotEmpty() },
+            "Mattermost".takeIf { cfg.mattermostEnabled && cfg.mattermostChannels.isNotEmpty() },
         )
         val title = when {
             !TelegramNotificationListener.connected.value -> "⚠ Нет доступа к уведомлениям"
@@ -134,8 +137,12 @@ class WatcherService : Service() {
             else -> "Слежу за " + sources.joinToString(" и ")
         }
         val lines = buildList {
-            if (cfg.targetChats.isNotEmpty()) add("Telegram: " + cfg.targetChats.joinToString(", "))
-            if (cfg.mattermostChannels.isNotEmpty()) add("Mattermost: " + cfg.mattermostChannels.joinToString(", "))
+            if (cfg.telegramEnabled && cfg.targetChats.isNotEmpty()) {
+                add("Telegram: " + cfg.targetChats.joinToString(", "))
+            }
+            if (cfg.mattermostEnabled && cfg.mattermostChannels.isNotEmpty()) {
+                add("Mattermost: " + cfg.mattermostChannels.joinToString(", "))
+            }
             val statuses = ConnectionMonitor.status.value
             if (statuses.isNotEmpty()) {
                 add("Связь: " + statuses.entries.joinToString(", ") { (name, s) ->

@@ -113,6 +113,8 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
         }
 
         Section("Чаты Telegram")
+        SwitchRow("Следить за Telegram", draft.telegramEnabled) { draft.telegramEnabled = it }
+        if (!draft.telegramEnabled) OffHint("Telegram")
         TargetsEditor(
             source = Source.TELEGRAM,
             value = draft.chats,
@@ -126,6 +128,8 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
         )
 
         Section("Каналы Mattermost")
+        SwitchRow("Следить за Mattermost", draft.mattermostEnabled) { draft.mattermostEnabled = it }
+        if (!draft.mattermostEnabled) OffHint("Mattermost")
         TargetsEditor(
             source = Source.MATTERMOST,
             value = draft.mattermostChannels,
@@ -270,7 +274,14 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
         }
         TextButton(onClick = {
             // Чаты и каналы оставляем, остальное — как в исходном config.json.
-            draft.load(AppConfig(targetChats = saved.targetChats, mattermostChannels = saved.mattermostChannels))
+            draft.load(
+                AppConfig(
+                    targetChats = saved.targetChats,
+                    mattermostChannels = saved.mattermostChannels,
+                    telegramEnabled = saved.telegramEnabled,
+                    mattermostEnabled = saved.mattermostEnabled,
+                )
+            )
             Toast.makeText(context, "Стандартные значения в форме — нажмите «Сохранить»", Toast.LENGTH_LONG).show()
         }) { Text("Сбросить к стандартным") }
     }
@@ -315,6 +326,15 @@ private fun TargetsEditor(
             TextButton(onClick = { onAdd(name) }) { Text("+ $name") }
         }
     }
+}
+
+@Composable
+private fun OffHint(name: String) {
+    Text(
+        "Выключено: сообщения $name не будят, связь с $name не проверяется. Список ниже сохранится.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+    )
 }
 
 @Composable

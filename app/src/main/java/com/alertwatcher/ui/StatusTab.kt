@@ -125,11 +125,17 @@ fun StatusTab(onOpenSettings: () -> Unit) {
                         AppLog.log(if (on) "Слежение включено" else "Слежение выключено")
                     })
                 }
-                Text("Чаты Telegram: " + config.targetChats.joinToString(", ").ifEmpty { "не указаны" })
-                Text("Каналы Mattermost: " + config.mattermostChannels.joinToString(", ").ifEmpty { "не указаны" })
+                Text(
+                    "Telegram: " + if (!config.telegramEnabled) "выключен" else
+                        config.targetChats.joinToString(", ").ifEmpty { "чаты не указаны" }
+                )
+                Text(
+                    "Mattermost: " + if (!config.mattermostEnabled) "выключен" else
+                        config.mattermostChannels.joinToString(", ").ifEmpty { "каналы не указаны" }
+                )
                 Text("Фоновая служба: " + if (serviceRunning) "работает" else "не запущена")
-                val targets = ConnectionMonitor.targets(config.connectionMonitor)
-                if (!config.connectionMonitor.enabled || targets.isEmpty()) {
+                val targets = ConnectionMonitor.targets(config)
+                if (targets.isEmpty()) {
                     Text("Проверка связи: выключена")
                 } else {
                     targets.forEach { t ->
@@ -204,6 +210,8 @@ fun StatusTab(onOpenSettings: () -> Unit) {
             installed = checks.installedTelegram,
             packages = config.telegramPackages,
             used = config.targetChats.isNotEmpty(),
+            switchedOff = !config.telegramEnabled,
+            onOpenSettings = onOpenSettings,
             setupHint = "В Telegram у нужного чата должны быть включены уведомления (можно без звука), " +
                 "а в настройках уведомлений — «Показывать текст».",
             storePackage = AppConfig.DEFAULT_TELEGRAM_PACKAGES.first(),
@@ -214,6 +222,8 @@ fun StatusTab(onOpenSettings: () -> Unit) {
             installed = checks.installedMattermost,
             packages = config.mattermostPackages,
             used = config.mattermostChannels.isNotEmpty(),
+            switchedOff = !config.mattermostEnabled,
+            onOpenSettings = onOpenSettings,
             setupHint = "В Mattermost у канала включите мобильные уведомления обо всех сообщениях, " +
                 "а в настройках уведомлений — отправку на телефон всегда (иначе, пока вы в сети на " +
                 "компьютере, на телефон ничего не придёт). В уведомлении должен быть виден текст.",
@@ -222,8 +232,8 @@ fun StatusTab(onOpenSettings: () -> Unit) {
         CheckRow(
             ok = config.hasTargets(),
             title = "8. Указаны чаты для слежения",
-            description = "Чаты Telegram и/или каналы Mattermost. Удобнее выбрать из списка замеченных " +
-                "на вкладке «Настройки».",
+            description = "Чаты Telegram и/или каналы Mattermost (у включённых мессенджеров). " +
+                "Удобнее выбрать из списка замеченных на вкладке «Настройки».",
             action = "Настройки" to onOpenSettings,
         )
 
@@ -256,7 +266,8 @@ private fun TestButtons(context: Context) {
         onClick = {
             checkingConnection = true
             scope.launch {
-                val results = ConnectionMonitor.checkAll(context, ConfigStore.config.value.connectionMonitor)
+                val config = ConfigStore.config.value
+                val results = ConnectionMonitor.checkAll(context, config.connectionMonitor, ConnectionMonitor.targets(config))
                 checkingConnection = false
                 val msg = if (results.isEmpty()) {
                     "Адреса для проверки не указаны (вкладка «Настройки»)"
@@ -308,7 +319,10 @@ private fun CheckRow(
     }
 }
 
-/** Пункт «Telegram/Mattermost установлен»: обязателен, только если для него указаны чаты. */
+/**
+ * Пункт «Telegram/Mattermost установлен»: обязателен, только если для него указаны
+ * чаты; если слежение за мессенджером выключено — только подсказка, где включить.
+ */
 @Composable
 private fun MessengerRow(
     number: Int,
@@ -316,10 +330,22 @@ private fun MessengerRow(
     installed: List<String>,
     packages: List<String>,
     used: Boolean,
+    switchedOff: Boolean,
+    onOpenSettings: () -> Unit,
     setupHint: String,
     storePackage: String,
 ) {
     val context = LocalContext.current
+    if (switchedOff) {
+        CheckRow(
+            ok = false,
+            optional = true,
+            title = "$number. $name — слежение выключено",
+            description = "Включается переключателем «Следить за $name» на вкладке «Настройки».",
+            action = "Настройки" to onOpenSettings,
+        )
+        return
+    }
     val pkg = installed.firstOrNull()
     CheckRow(
         ok = pkg != null,

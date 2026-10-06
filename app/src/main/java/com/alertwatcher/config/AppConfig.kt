@@ -21,6 +21,10 @@ data class AppConfig(
     val targetChats: List<String> = emptyList(),
     /** Названия каналов Mattermost, за которыми следим (регистр не важен). */
     val mattermostChannels: List<String> = emptyList(),
+    /** Следить за Telegram. Выключено — не будит и не проверяет связь, но списки сохраняются. */
+    val telegramEnabled: Boolean = true,
+    /** Следить за Mattermost (аналогично). */
+    val mattermostEnabled: Boolean = true,
     val alertPatterns: List<String> = DEFAULT_ALERT_PATTERNS,
     val ignorePatterns: List<String> = DEFAULT_IGNORE_PATTERNS,
     val connectionMonitor: ConnectionMonitorConfig = ConnectionMonitorConfig(),
@@ -42,7 +46,14 @@ data class AppConfig(
         else -> null
     }
 
-    fun hasTargets(): Boolean = targetChats.isNotEmpty() || mattermostChannels.isNotEmpty()
+    fun isEnabled(source: Source): Boolean = when (source) {
+        Source.TELEGRAM -> telegramEnabled
+        Source.MATTERMOST -> mattermostEnabled
+    }
+
+    /** Есть ли хоть один чат/канал у включённых мессенджеров. */
+    fun hasTargets(): Boolean =
+        (telegramEnabled && targetChats.isNotEmpty()) || (mattermostEnabled && mattermostChannels.isNotEmpty())
 
     fun isTracked(source: Source, title: String): Boolean = when (source) {
         Source.TELEGRAM -> isTrackedChat(title)
@@ -70,7 +81,9 @@ data class AppConfig(
 
     fun toJson(): JSONObject = JSONObject().apply {
         put("_comment", "Ключевые слова/паттерны, при которых сообщение считается алертом. Регистр не важен, можно использовать регулярки (экранировать обратный слэш как \\).")
+        put("telegram_enabled", telegramEnabled)
         put("target_chats", JSONArray(targetChats))
+        put("mattermost_enabled", mattermostEnabled)
         put("mattermost_channels", JSONArray(mattermostChannels))
         put("alert_patterns", JSONArray(alertPatterns))
         put("_comment_ignore", "Паттерны, при которых алерт НЕ должен срабатывать, даже если совпал alert_patterns выше. Проверяются ПЕРВЫМИ и имеют приоритет.")
@@ -137,6 +150,7 @@ data class AppConfig(
                 "target_chats", "target_chat", "alert_patterns", "ignore_patterns",
                 "connection_monitor", "sound_path", "sound_uri", "max_volume",
                 "vibrate", "telegram_packages", "mattermost_channels", "mattermost_packages",
+                "telegram_enabled", "mattermost_enabled",
             )
             json.keys().asSequence()
                 .filter { !it.startsWith("_") && it !in known }
@@ -153,6 +167,8 @@ data class AppConfig(
                         "чат указывается названием (target_chats), оставлены текущие чаты."
                 }
             }
+            if (json.has("telegram_enabled")) cfg = cfg.copy(telegramEnabled = json.getBoolean("telegram_enabled"))
+            if (json.has("mattermost_enabled")) cfg = cfg.copy(mattermostEnabled = json.getBoolean("mattermost_enabled"))
             if (json.has("mattermost_channels")) {
                 cfg = cfg.copy(mattermostChannels = json.getJSONArray("mattermost_channels").toStringList())
             }

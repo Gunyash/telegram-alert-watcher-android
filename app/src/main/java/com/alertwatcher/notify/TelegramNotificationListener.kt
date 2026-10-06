@@ -77,9 +77,9 @@ class TelegramNotificationListener : NotificationListenerService() {
             AppLog.log("Замечен $what ${source.title} «${parsed.chatTitle}» (не отслеживается)")
         }
         if (!tracked) return 0
-        // Пока слежение выключено, сообщения только запоминаем — чтобы после
-        // включения не сработали алерты по старым непрочитанным.
-        val quiet = silent || !AppState.enabled.value
+        // Пока слежение (общее или за этим мессенджером) выключено, сообщения только
+        // запоминаем — чтобы после включения не сработали алерты по старым непрочитанным.
+        val quiet = silent || !AppState.enabled.value || !config.isEnabled(source)
 
         var newCount = 0
         for (msg in parsed.messages) {

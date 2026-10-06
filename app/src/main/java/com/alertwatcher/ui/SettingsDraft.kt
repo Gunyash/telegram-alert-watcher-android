@@ -16,6 +16,8 @@ import com.alertwatcher.config.Source
  * ViewModel — чтобы правки не терялись при повороте экрана.
  */
 class SettingsDraft : ViewModel() {
+    var telegramEnabled by mutableStateOf(true)
+    var mattermostEnabled by mutableStateOf(true)
     var chats by mutableStateOf("")
     var mattermostChannels by mutableStateOf("")
     var alertPatterns by mutableStateOf("")
@@ -41,6 +43,8 @@ class SettingsDraft : ViewModel() {
     }
 
     fun load(cfg: AppConfig) {
+        telegramEnabled = cfg.telegramEnabled
+        mattermostEnabled = cfg.mattermostEnabled
         chats = cfg.targetChats.joinToString("\n")
         mattermostChannels = cfg.mattermostChannels.joinToString("\n")
         alertPatterns = cfg.alertPatterns.joinToString("\n")
@@ -83,6 +87,8 @@ class SettingsDraft : ViewModel() {
         val cfg = AppConfig(
             targetChats = lines(chats),
             mattermostChannels = lines(mattermostChannels),
+            telegramEnabled = telegramEnabled,
+            mattermostEnabled = mattermostEnabled,
             alertPatterns = lines(alertPatterns),
             ignorePatterns = lines(ignorePatterns),
             connectionMonitor = cm,
@@ -95,6 +101,10 @@ class SettingsDraft : ViewModel() {
         errs += AlertMatcher.validate(cfg.alertPatterns)
         errs += AlertMatcher.validate(cfg.ignorePatterns)
         if (cfg.alertPatterns.isEmpty()) errs += "alert_patterns пуст — алерты не будут срабатывать"
+        if (!cfg.telegramEnabled && !cfg.mattermostEnabled) {
+            errs += "Выключены оба мессенджера. Чтобы временно ничего не отслеживать, используйте " +
+                "переключатель «Слежение включено» на вкладке «Статус»."
+        }
         if (cfg.targetChats.isNotEmpty() && cfg.telegramPackages.isEmpty()) errs += "Список пакетов Telegram пуст"
         if (cfg.mattermostChannels.isNotEmpty() && cfg.mattermostPackages.isEmpty()) {
             errs += "Список пакетов Mattermost пуст"

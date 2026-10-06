@@ -1,6 +1,10 @@
 {
   "_comment": "Пример файла настроек для импорта в приложение (Настройки → Импорт config.json). Формат совместим с config.json от версии для ПК: можно импортировать и его — недостающие поля возьмутся из текущих настроек.",
 
+  "_comment_enabled": "telegram_enabled / mattermost_enabled — следить ли за мессенджером. false: не будит и связь не проверяет, но списки ниже сохраняются.",
+  "telegram_enabled": true,
+  "mattermost_enabled": true,
+
   "_comment_chats": "Точные названия чатов Telegram, как в шапке чата. На ПК чат задавался ID в secrets.json — на телефоне вместо этого название.",
   "target_chats": [
     "Zabbix Alerts"

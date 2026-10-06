@@ -7,6 +7,7 @@ import android.os.SystemClock
 import com.alertwatcher.AppLog
 import com.alertwatcher.alarm.AlarmController
 import com.alertwatcher.alarm.AlarmEvent
+import com.alertwatcher.config.AppConfig
 import com.alertwatcher.config.ConnectionMonitorConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -47,10 +48,15 @@ object ConnectionMonitor {
     /** Состояние по каждой цели; пусто — мониторинг выключен. */
     val status: StateFlow<Map<String, Status>> = _status.asStateFlow()
 
-    fun targets(cfg: ConnectionMonitorConfig): List<Target> = listOfNotNull(
-        cfg.checkUrl.takeIf { it.isNotBlank() }?.let { Target("Telegram", it) },
-        cfg.mattermostUrl.takeIf { it.isNotBlank() }?.let { Target("Mattermost", it) },
-    )
+    /** Что проверять: только включённые мессенджеры с непустым адресом. */
+    fun targets(config: AppConfig): List<Target> {
+        val cm = config.connectionMonitor
+        if (!cm.enabled) return emptyList()
+        return listOfNotNull(
+            cm.checkUrl.takeIf { config.telegramEnabled && it.isNotBlank() }?.let { Target("Telegram", it) },
+            cm.mattermostUrl.takeIf { config.mattermostEnabled && it.isNotBlank() }?.let { Target("Mattermost", it) },
+        )
+    }
 
     /** Счётчики одной цели между проверками. */
     private class TargetState {
@@ -60,8 +66,7 @@ object ConnectionMonitor {
     }
 
     /** Бесконечный цикл проверок; останавливается отменой корутины. */
-    suspend fun run(context: Context, cfg: ConnectionMonitorConfig) {
-        val targets = if (cfg.enabled) targets(cfg) else emptyList()
+    suspend fun run(context: Context, cfg: ConnectionMonitorConfig, targets: List<Target>) {
         _status.value = targets.associate { it.name to Status() }
         if (targets.isEmpty()) return
 
@@ -136,7 +141,7 @@ object ConnectionMonitor {
     suspend fun checkAll(
         context: Context,
         cfg: ConnectionMonitorConfig,
-        targets: List<Target> = targets(cfg),
+        targets: List<Target>,
     ): List<Pair<Target, Boolean>> {
         val network = try {
             hasNetwork(context)
