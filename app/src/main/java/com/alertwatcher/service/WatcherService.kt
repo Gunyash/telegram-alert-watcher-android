@@ -36,7 +36,7 @@ import kotlinx.coroutines.launch
 /**
  * Фоновая служба с постоянным уведомлением. Нужна, чтобы Android не выгружал
  * приложение из памяти, и в ней крутится мониторинг связи.
- * Сами сообщения Telegram ловит TelegramNotificationListener.
+ * Сами сообщения Telegram и Mattermost ловит TelegramNotificationListener.
  */
 class WatcherService : Service() {
 
@@ -124,27 +124,30 @@ class WatcherService : Service() {
 
     private fun statusText(): Pair<String, String> {
         val cfg = ConfigStore.config.value
+        val sources = listOfNotNull(
+            "Telegram".takeIf { cfg.targetChats.isNotEmpty() },
+            "Mattermost".takeIf { cfg.mattermostChannels.isNotEmpty() },
+        )
         val title = when {
             !TelegramNotificationListener.connected.value -> "⚠ Нет доступа к уведомлениям"
-            cfg.targetChats.isEmpty() -> "⚠ Не указан чат для слежения"
-            else -> "Слежу за Telegram"
+            sources.isEmpty() -> "⚠ Не указаны чаты для слежения"
+            else -> "Слежу за " + sources.joinToString(" и ")
         }
-        val text = buildString {
-            append("Чаты: ")
-            append(cfg.targetChats.joinToString(", ").ifEmpty { "—" })
-            if (cfg.connectionMonitor.enabled) {
-                val s = ConnectionMonitor.status.value
-                append(" · связь: ")
-                append(
-                    when (s.ok) {
+        val lines = buildList {
+            if (cfg.targetChats.isNotEmpty()) add("Telegram: " + cfg.targetChats.joinToString(", "))
+            if (cfg.mattermostChannels.isNotEmpty()) add("Mattermost: " + cfg.mattermostChannels.joinToString(", "))
+            val statuses = ConnectionMonitor.status.value
+            if (statuses.isNotEmpty()) {
+                add("Связь: " + statuses.entries.joinToString(", ") { (name, s) ->
+                    name + " " + when (s.ok) {
                         true -> "OK"
                         false -> "НЕТ (${s.fails})"
-                        null -> "проверяется…"
+                        null -> "…"
                     }
-                )
+                })
             }
         }
-        return title to text
+        return title to lines.joinToString("\n").ifEmpty { "Чаты не указаны" }
     }
 
     private fun buildNotification(content: Pair<String, String>): Notification {

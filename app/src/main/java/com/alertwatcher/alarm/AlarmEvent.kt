@@ -8,11 +8,21 @@ data class AlarmEvent(
     val kind: Kind,
     val title: String,
     val text: String,
-    /** Чат Telegram, из которого пришло сообщение (для алертов по сообщениям). */
+    /** Чат Telegram / канал Mattermost, из которого пришло сообщение (для алертов по сообщениям). */
     val chat: String?,
-    /** Время события (для сообщения — время отправки в Telegram). */
+    /** Время события (для Telegram — время отправки сообщения). */
     val time: Long,
+    /** «Telegram» / «Mattermost»: откуда сообщение или с чем пропала связь. */
+    val source: String? = null,
 ) {
+    /** Строка «откуда» для красного экрана и уведомления. */
+    val origin: String?
+        get() = when {
+            chat != null && source != null -> "$source: $chat"
+            chat != null -> "Чат: $chat"
+            else -> null
+        }
+
     enum class Kind { MESSAGE, CONNECTION, TEST }
 
     fun toJson(): JSONObject = JSONObject()
@@ -22,16 +32,18 @@ data class AlarmEvent(
         .put("text", text)
         .put("chat", chat ?: JSONObject.NULL)
         .put("time", time)
+        .put("source", source ?: JSONObject.NULL)
 
     companion object {
-        fun message(chat: String, text: String, sentAt: Long) = AlarmEvent(
+        fun message(source: String, chat: String, text: String, sentAt: Long) = AlarmEvent(
             id = newId(), kind = Kind.MESSAGE, title = "⚠ АЛЕРТ ⚠", text = text, chat = chat,
-            time = if (sentAt > 0) sentAt else System.currentTimeMillis(),
+            time = if (sentAt > 0) sentAt else System.currentTimeMillis(), source = source,
         )
 
-        fun connection(text: String) = AlarmEvent(
-            id = newId(), kind = Kind.CONNECTION, title = "⚠ НЕТ СВЯЗИ С TELEGRAM ⚠", text = text,
-            chat = null, time = System.currentTimeMillis(),
+        /** [source] — «Telegram» или «Mattermost». */
+        fun connection(source: String, text: String) = AlarmEvent(
+            id = newId(), kind = Kind.CONNECTION, title = "⚠ НЕТ СВЯЗИ С ${source.uppercase()} ⚠",
+            text = text, chat = null, time = System.currentTimeMillis(), source = source,
         )
 
         fun test() = AlarmEvent(
@@ -47,6 +59,7 @@ data class AlarmEvent(
             text = o.getString("text"),
             chat = if (o.isNull("chat")) null else o.getString("chat"),
             time = o.getLong("time"),
+            source = if (o.isNull("source")) null else o.optString("source"),
         )
 
         // Достаточно уникально для очереди и не повторяется после перезапуска процесса.

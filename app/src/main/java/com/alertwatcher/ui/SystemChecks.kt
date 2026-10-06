@@ -26,9 +26,10 @@ object SystemChecks {
         val batteryUnrestricted: Boolean,
         val overlay: Boolean,
         val installedTelegram: List<String>,
+        val installedMattermost: List<String>,
     )
 
-    fun read(context: Context, telegramPackages: List<String>) = Snapshot(
+    fun read(context: Context, telegramPackages: List<String>, mattermostPackages: List<String>) = Snapshot(
         listenerAccess = NotificationManagerCompat.getEnabledListenerPackages(context)
             .contains(context.packageName),
         postNotifications = Build.VERSION.SDK_INT < 33 ||
@@ -40,6 +41,7 @@ object SystemChecks {
             .isIgnoringBatteryOptimizations(context.packageName),
         overlay = Settings.canDrawOverlays(context),
         installedTelegram = telegramPackages.filter { isInstalled(context, it) },
+        installedMattermost = mattermostPackages.filter { isInstalled(context, it) },
     )
 
     private fun isInstalled(context: Context, pkg: String): Boolean = try {

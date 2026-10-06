@@ -94,6 +94,16 @@ class AlarmActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        AlarmController.setAlarmScreenVisible(this, true)
+    }
+
+    override fun onStop() {
+        AlarmController.setAlarmScreenVisible(this, false)
+        super.onStop()
+    }
 }
 
 @Composable
@@ -132,8 +142,8 @@ private fun AlarmScreen(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(8.dp))
-        event.chat?.let {
-            Text("Чат: $it", color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center)
+        event.origin?.let {
+            Text(it, color = Color.White, fontSize = 18.sp, textAlign = TextAlign.Center)
         }
         Text(time, color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp)
         Spacer(Modifier.height(16.dp))

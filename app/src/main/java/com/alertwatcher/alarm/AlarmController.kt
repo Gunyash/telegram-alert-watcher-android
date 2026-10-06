@@ -86,11 +86,12 @@ object AlarmController {
         main.post { syncEffects(app) }
     }
 
-    /** Есть ли показанный или ожидающий в очереди алерт о потере связи. */
-    fun hasConnectionAlarm(): Boolean {
+    /** Есть ли показанный или ожидающий в очереди алерт о потере связи с [source]. */
+    fun hasConnectionAlarm(source: String): Boolean {
         val s = _state.value
-        return s.current?.kind == AlarmEvent.Kind.CONNECTION ||
-            s.queued.any { it.kind == AlarmEvent.Kind.CONNECTION }
+        return (listOfNotNull(s.current) + s.queued).any {
+            it.kind == AlarmEvent.Kind.CONNECTION && it.source == source
+        }
     }
 
     /** Уведомление смахнули, а алерт не подтверждён — показываем снова. */
@@ -143,7 +144,27 @@ object AlarmController {
         // Фоновая служба повышает приоритет процесса, пока играет звук.
         WatcherService.startIfEnabled(app)
         AlarmSoundPlayer.start(app, ConfigStore.config.value)
-        showNotification(app, s)
+        if (alarmScreenVisible) {
+            // Красный экран уже перед глазами — всплывающее уведомление только закрывало бы его верх.
+            NotificationManagerCompat.from(app).cancel(NOTIFICATION_ID)
+        } else {
+            showNotification(app, s)
+        }
+    }
+
+    @Volatile
+    private var alarmScreenVisible = false
+
+    /**
+     * Красный экран показан/скрыт. Пока он виден, уведомления нет; как только
+     * его закрыли без подтверждения (кнопка «Домой», выключили экран) —
+     * уведомление появляется снова и при заблокированном телефоне опять
+     * открывает красный экран.
+     */
+    fun setAlarmScreenVisible(context: Context, visible: Boolean) {
+        val app = context.applicationContext
+        alarmScreenVisible = visible
+        main.post { syncEffects(app) }
     }
 
     private fun alarmScreenIntent(app: Context) =
@@ -185,7 +206,7 @@ object AlarmController {
             flags,
         )
         val more = if (s.queued.isNotEmpty()) " (+ещё ${s.queued.size})" else ""
-        val body = (event.chat?.let { "Чат: $it\n" } ?: "") + event.text
+        val body = (event.origin?.let { "$it\n" } ?: "") + event.text
 
         val notification = NotificationCompat.Builder(app, App.CHANNEL_ALARM)
             .setSmallIcon(R.drawable.ic_stat_alert)

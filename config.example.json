@@ -6,6 +6,11 @@
     "Zabbix Alerts"
   ],
 
+  "_comment_mattermost": "Названия каналов Mattermost, как в списке каналов (регистр и «~» не важны). Паттерны ниже — общие для Telegram и Mattermost.",
+  "mattermost_channels": [
+    "zabbix"
+  ],
+
   "alert_patterns": [
     "#PROBLEM\\b",
     "🔴",
@@ -24,7 +29,7 @@
   ],
   "_comment_ignore_example": "Последнее правило — пример «игнорировать, только если в сообщении есть ОБА фрагмента»: (?=[\\s\\S]*первый)(?=[\\s\\S]*второй). Замените на свои значения или удалите.",
 
-  "_comment_connection": "Как на ПК, плюс check_url (куда стучаться при проверке) и keep_cpu_awake (проверять и в глубоком сне, ценой батареи).",
+  "_comment_connection": "Как на ПК, плюс check_url (адрес для проверки Telegram), mattermost_check_url (адрес вашего сервера Mattermost; пусто — не проверять) и keep_cpu_awake (проверять и в глубоком сне, ценой батареи).",
   "connection_monitor": {
     "enabled": true,
     "check_interval_sec": 15,
@@ -32,6 +37,7 @@
     "fail_threshold": 3,
     "realert_interval_sec": 600,
     "check_url": "https://api.telegram.org",
+    "mattermost_check_url": "",
     "keep_cpu_awake": false
   },
 
@@ -42,5 +48,9 @@
     "org.telegram.messenger.web",
     "org.telegram.messenger.beta",
     "org.thunderdog.challegram"
+  ],
+  "mattermost_packages": [
+    "com.mattermost.rn",
+    "com.mattermost.rnbeta"
   ]
 }

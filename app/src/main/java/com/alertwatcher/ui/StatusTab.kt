@@ -74,8 +74,8 @@ fun StatusTab(onOpenSettings: () -> Unit) {
         refresh++
         onPauseOrDispose { }
     }
-    val checks = remember(refresh, config.telegramPackages) {
-        SystemChecks.read(context, config.telegramPackages)
+    val checks = remember(refresh, config.telegramPackages, config.mattermostPackages) {
+        SystemChecks.read(context, config.telegramPackages, config.mattermostPackages)
     }
     LaunchedEffect(checks, listenerConnected) {
         // Доступ выдан, но система нас не подключила (бывает после обновления) — просим переподключить.
@@ -88,7 +88,7 @@ fun StatusTab(onOpenSettings: () -> Unit) {
     ) { refresh++ }
 
     val ready = checks.listenerAccess && checks.postNotifications && checks.fullScreenIntent &&
-        config.targetChats.isNotEmpty() && enabled
+        config.hasTargets() && enabled
 
     Column(
         Modifier
@@ -125,9 +125,17 @@ fun StatusTab(onOpenSettings: () -> Unit) {
                         AppLog.log(if (on) "Слежение включено" else "Слежение выключено")
                     })
                 }
-                Text("Чаты: " + config.targetChats.joinToString(", ").ifEmpty { "не указаны" })
+                Text("Чаты Telegram: " + config.targetChats.joinToString(", ").ifEmpty { "не указаны" })
+                Text("Каналы Mattermost: " + config.mattermostChannels.joinToString(", ").ifEmpty { "не указаны" })
                 Text("Фоновая служба: " + if (serviceRunning) "работает" else "не запущена")
-                Text("Связь с Telegram: " + connectionText(config.connectionMonitor.enabled, connection))
+                val targets = ConnectionMonitor.targets(config.connectionMonitor)
+                if (!config.connectionMonitor.enabled || targets.isEmpty()) {
+                    Text("Проверка связи: выключена")
+                } else {
+                    targets.forEach { t ->
+                        Text("Связь с ${t.name}: " + connectionText(connection[t.name]))
+                    }
+                }
             }
         }
 
@@ -139,7 +147,7 @@ fun StatusTab(onOpenSettings: () -> Unit) {
             description = if (checks.listenerAccess && !listenerConnected) {
                 "Доступ выдан, но служба не подключилась. Выключите и снова включите доступ."
             } else {
-                "Главное разрешение: без него приложение не видит сообщения Telegram. " +
+                "Главное разрешение: без него приложение не видит сообщения Telegram и Mattermost. " +
                     "Если переключатель серый («Ограниченная настройка») — нажмите «Сведения о приложении» → " +
                     "⋮ (вверху справа) → «Разрешить ограниченные настройки» и попробуйте снова."
             },
@@ -190,26 +198,32 @@ fun StatusTab(onOpenSettings: () -> Unit) {
                 "пользуются. Без этого в такой момент будет всплывающее уведомление (звук всё равно играет).",
             action = "Открыть" to { SystemChecks.openOverlaySettings(context) },
         )
-        CheckRow(
-            ok = checks.installedTelegram.isNotEmpty(),
-            title = "6. Telegram установлен",
-            description = if (checks.installedTelegram.isEmpty()) {
-                "Не найден ни один из пакетов: ${config.telegramPackages.joinToString()}"
-            } else {
-                "Найден: ${checks.installedTelegram.joinToString()}. В Telegram у нужного чата должны быть " +
-                    "включены уведомления (можно без звука), а в настройках уведомлений — «Показывать текст»."
-            },
-            action = checks.installedTelegram.firstOrNull()?.let { pkg ->
-                "Уведомления Telegram" to { SystemChecks.openAppNotificationSettings(context, pkg) }
-            } ?: ("Установить" to { SystemChecks.openStore(context, AppConfig.DEFAULT_TELEGRAM_PACKAGES.first()) }),
-            secondary = checks.installedTelegram.firstOrNull()?.let { pkg ->
-                "Открыть Telegram" to { SystemChecks.launchApp(context, pkg) }
-            },
+        MessengerRow(
+            number = 6,
+            name = "Telegram",
+            installed = checks.installedTelegram,
+            packages = config.telegramPackages,
+            used = config.targetChats.isNotEmpty(),
+            setupHint = "В Telegram у нужного чата должны быть включены уведомления (можно без звука), " +
+                "а в настройках уведомлений — «Показывать текст».",
+            storePackage = AppConfig.DEFAULT_TELEGRAM_PACKAGES.first(),
+        )
+        MessengerRow(
+            number = 7,
+            name = "Mattermost",
+            installed = checks.installedMattermost,
+            packages = config.mattermostPackages,
+            used = config.mattermostChannels.isNotEmpty(),
+            setupHint = "В Mattermost у канала включите мобильные уведомления обо всех сообщениях, " +
+                "а в настройках уведомлений — отправку на телефон всегда (иначе, пока вы в сети на " +
+                "компьютере, на телефон ничего не придёт). В уведомлении должен быть виден текст.",
+            storePackage = AppConfig.DEFAULT_MATTERMOST_PACKAGES.first(),
         )
         CheckRow(
-            ok = config.targetChats.isNotEmpty(),
-            title = "7. Указан чат для слежения",
-            description = "Точное название чата, как в Telegram. Удобнее выбрать из списка замеченных чатов на вкладке «Настройки».",
+            ok = config.hasTargets(),
+            title = "8. Указаны чаты для слежения",
+            description = "Чаты Telegram и/или каналы Mattermost. Удобнее выбрать из списка замеченных " +
+                "на вкладке «Настройки».",
             action = "Настройки" to onOpenSettings,
         )
 
@@ -242,14 +256,20 @@ private fun TestButtons(context: Context) {
         onClick = {
             checkingConnection = true
             scope.launch {
-                val ok = ConnectionMonitor.check(context, ConfigStore.config.value.connectionMonitor)
+                val results = ConnectionMonitor.checkAll(context, ConfigStore.config.value.connectionMonitor)
                 checkingConnection = false
-                val msg = if (ok) "Связь с Telegram есть" else "Нет связи с ${ConfigStore.config.value.connectionMonitor.checkUrl}"
+                val msg = if (results.isEmpty()) {
+                    "Адреса для проверки не указаны (вкладка «Настройки»)"
+                } else {
+                    results.joinToString("\n") { (t, ok) ->
+                        if (ok) "${t.name}: связь есть" else "${t.name}: нет связи с ${t.url}"
+                    }
+                }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
             }
         },
         modifier = Modifier.fillMaxWidth(),
-    ) { Text(if (checkingConnection) "Проверяю связь…" else "Проверить связь с Telegram") }
+    ) { Text(if (checkingConnection) "Проверяю связь…" else "Проверить связь с серверами") }
 }
 
 @Composable
@@ -288,8 +308,39 @@ private fun CheckRow(
     }
 }
 
-private fun connectionText(enabled: Boolean, s: ConnectionMonitor.Status): String {
-    if (!enabled) return "мониторинг выключен"
+/** Пункт «Telegram/Mattermost установлен»: обязателен, только если для него указаны чаты. */
+@Composable
+private fun MessengerRow(
+    number: Int,
+    name: String,
+    installed: List<String>,
+    packages: List<String>,
+    used: Boolean,
+    setupHint: String,
+    storePackage: String,
+) {
+    val context = LocalContext.current
+    val pkg = installed.firstOrNull()
+    CheckRow(
+        ok = pkg != null,
+        optional = !used,
+        title = "$number. $name установлен" + if (used) "" else " (если нужен)",
+        description = if (pkg == null) {
+            "Не найден ни один из пакетов: ${packages.joinToString()}"
+        } else {
+            "Найден: ${installed.joinToString()}. $setupHint"
+        },
+        action = if (pkg != null) {
+            "Уведомления $name" to { SystemChecks.openAppNotificationSettings(context, pkg) }
+        } else {
+            "Установить" to { SystemChecks.openStore(context, storePackage) }
+        },
+        secondary = pkg?.let { "Открыть $name" to { SystemChecks.launchApp(context, it) } },
+    )
+}
+
+private fun connectionText(s: ConnectionMonitor.Status?): String {
+    if (s == null) return "ещё не проверялась"
     val time = if (s.lastCheckAt > 0) {
         " (проверено в " + SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(s.lastCheckAt)) + ")"
     } else ""

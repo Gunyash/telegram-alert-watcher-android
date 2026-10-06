@@ -10,21 +10,29 @@ import androidx.core.app.NotificationCompat
 import androidx.core.os.BundleCompat
 
 /**
- * Достаёт из уведомления Telegram название чата и сообщения.
+ * Достаёт из уведомления мессенджера название чата/канала и сообщения.
  *
  * Telegram для каждого чата показывает отдельное уведомление в стиле
  * MessagingStyle: заголовок — название чата, внутри — все непрочитанные
- * сообщения с полным текстом и временем отправки. Плюс, если чатов несколько,
- * есть «сводное» уведомление группы — его пропускаем (текст там обрезан).
+ * сообщения с полным текстом и временем отправки.
+ * Mattermost показывает отдельное уведомление на каждое сообщение, тоже в
+ * MessagingStyle (заголовок — название канала) и кладёт в extras post_id и
+ * server_url.
+ * Сводные уведомления групп пропускаем: у Telegram текст там обрезан, а у
+ * Mattermost это копия обычного уведомления.
  */
-object TelegramNotificationParser {
+object MessageNotificationParser {
 
     data class Message(val text: String, val timestamp: Long, val sender: String)
 
     data class Parsed(
-        /** Название чата для отображения/сопоставления. */
+        /** Название чата/канала для отображения/сопоставления. */
         val chatTitle: String,
         val messages: List<Message>,
+        /** ID сообщения на сервере (Mattermost), не меняется при перерисовке уведомления. */
+        val postId: String? = null,
+        /** Адрес сервера (Mattermost) — подсказка для проверки связи. */
+        val serverUrl: String? = null,
     )
 
     fun parse(sbn: StatusBarNotification): Parsed? {
@@ -41,7 +49,12 @@ object TelegramNotificationParser {
             ?: fromRawMessages(extras)
             ?: fromPlainText(n, extras)
         if (messages.isEmpty()) return null
-        return Parsed(title, messages)
+        return Parsed(
+            chatTitle = title,
+            messages = messages,
+            postId = extras.getString("post_id")?.takeIf { it.isNotBlank() },
+            serverUrl = extras.getString("server_url")?.takeIf { it.isNotBlank() },
+        )
     }
 
     private fun fromCompatStyle(n: Notification): List<Message>? = try {

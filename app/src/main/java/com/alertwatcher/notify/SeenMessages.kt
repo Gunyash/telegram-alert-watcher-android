@@ -16,8 +16,17 @@ object SeenMessages {
     private val keys = LinkedHashSet<String>()
     private var loaded = false
 
-    fun keyOf(chat: String, msg: TelegramNotificationParser.Message): String =
-        "${chat.hashCode()}:${msg.timestamp}:${msg.sender.hashCode()}:${msg.text.hashCode()}"
+    /**
+     * У Mattermost время в уведомлении — момент показа, а не отправки, поэтому
+     * сообщение узнаём по его ID на сервере. У Telegram ID нет, зато время
+     * отправки стабильно.
+     */
+    fun keyOf(chat: String, msg: MessageNotificationParser.Message, postId: String? = null): String =
+        if (postId != null) {
+            "post:$postId:${msg.text.hashCode()}"
+        } else {
+            "${chat.hashCode()}:${msg.timestamp}:${msg.sender.hashCode()}:${msg.text.hashCode()}"
+        }
 
     /** true — сообщение новое (и теперь запомнено), false — уже видели. */
     @Synchronized

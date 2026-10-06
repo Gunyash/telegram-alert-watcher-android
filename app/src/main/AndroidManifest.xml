@@ -20,12 +20,14 @@
     <!-- Запрос на отключение оптимизации батареи для приложения -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- Чтобы проверить, установлен ли Telegram (Android 11+ иначе не даёт видеть чужие пакеты) -->
+    <!-- Чтобы проверить, установлены ли Telegram и Mattermost (Android 11+ иначе не даёт видеть чужие пакеты) -->
     <queries>
         <package android:name="org.telegram.messenger" />
         <package android:name="org.telegram.messenger.web" />
         <package android:name="org.telegram.messenger.beta" />
         <package android:name="org.thunderdog.challegram" />
+        <package android:name="com.mattermost.rn" />
+        <package android:name="com.mattermost.rnbeta" />
     </queries>
 
     <application

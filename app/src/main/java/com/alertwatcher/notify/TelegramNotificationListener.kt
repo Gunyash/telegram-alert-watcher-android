@@ -10,6 +10,7 @@ import com.alertwatcher.alarm.AlarmController
 import com.alertwatcher.alarm.AlarmEvent
 import com.alertwatcher.config.AlertMatcher
 import com.alertwatcher.config.ConfigStore
+import com.alertwatcher.config.Source
 import com.alertwatcher.service.WatcherService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,14 +18,18 @@ import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Замена handler() из watcher.py. Вместо собственного подключения к Telegram
- * (Telethon) читаем уведомления официального приложения Telegram на телефоне:
- * не нужны api_id/api_hash/сессия, а доставку сообщений обеспечивает сам Telegram.
+ * (Telethon) читаем уведомления официальных приложений Telegram и Mattermost
+ * на телефоне: не нужны ключи/сессии, а доставку сообщений обеспечивают сами
+ * мессенджеры.
+ *
+ * Имя класса осталось от первой версии: доступ к уведомлениям Android выдаёт
+ * конкретному классу, и после переименования его пришлось бы выдавать заново.
  */
 class TelegramNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         _connected.value = true
-        AppLog.log("Доступ к уведомлениям активен, слушаю Telegram")
+        AppLog.log("Доступ к уведомлениям активен, слушаю Telegram и Mattermost")
         WatcherService.startIfEnabled(this)
 
         val active = try {
@@ -59,15 +64,17 @@ class TelegramNotificationListener : NotificationListenerService() {
         }
     }
 
-    /** Возвращает число новых сообщений из отслеживаемого чата. */
+    /** Возвращает число новых сообщений из отслеживаемого чата/канала. */
     private fun handle(sbn: StatusBarNotification, silent: Boolean): Int {
         val config = ConfigStore.config.value
-        if (sbn.packageName !in config.telegramPackages) return 0
-        val parsed = TelegramNotificationParser.parse(sbn) ?: return 0
+        val source = config.sourceOf(sbn.packageName) ?: return 0
+        val parsed = MessageNotificationParser.parse(sbn) ?: return 0
+        if (source == Source.MATTERMOST) parsed.serverUrl?.let { AppState.noteMattermostServer(it) }
 
-        val tracked = config.isTrackedChat(parsed.chatTitle)
-        if (AppState.noteChat(parsed.chatTitle) && !tracked && !silent) {
-            AppLog.log("Замечен чат «${parsed.chatTitle}» (не отслеживается)")
+        val tracked = config.isTracked(source, parsed.chatTitle)
+        if (AppState.noteChat(source, parsed.chatTitle) && !tracked && !silent) {
+            val what = if (source == Source.MATTERMOST) "канал" else "чат"
+            AppLog.log("Замечен $what ${source.title} «${parsed.chatTitle}» (не отслеживается)")
         }
         if (!tracked) return 0
         // Пока слежение выключено, сообщения только запоминаем — чтобы после
@@ -76,17 +83,22 @@ class TelegramNotificationListener : NotificationListenerService() {
 
         var newCount = 0
         for (msg in parsed.messages) {
-            if (!SeenMessages.markIfNew(SeenMessages.keyOf(parsed.chatTitle, msg))) continue
+            if (!SeenMessages.markIfNew(SeenMessages.keyOf(parsed.chatTitle, msg, parsed.postId))) continue
             newCount++
             if (quiet) continue
 
-            AppLog.log("[${parsed.chatTitle}] ${msg.text.take(200).replace('\n', ' ')}")
+            AppLog.log("[${source.title} · ${parsed.chatTitle}] ${msg.text.take(200).replace('\n', ' ')}")
             when (val verdict = ConfigStore.matcher().check(msg.text)) {
                 is AlertMatcher.Verdict.Alert -> {
                     AppLog.log("!!! АЛЕРТ ОБНАРУЖЕН !!! (паттерн ${verdict.pattern})")
                     AlarmController.trigger(
                         this,
-                        AlarmEvent.message(chat = parsed.chatTitle, text = msg.text, sentAt = msg.timestamp),
+                        AlarmEvent.message(
+                            source = source.title,
+                            chat = parsed.chatTitle,
+                            text = msg.text,
+                            sentAt = msg.timestamp,
+                        ),
                     )
                 }
                 is AlertMatcher.Verdict.Ignored ->

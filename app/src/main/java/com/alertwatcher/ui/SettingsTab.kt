@@ -43,12 +43,13 @@ import com.alertwatcher.AppState
 import com.alertwatcher.config.AlertMatcher
 import com.alertwatcher.config.AppConfig
 import com.alertwatcher.config.ConfigStore
+import com.alertwatcher.config.Source
 
 @Composable
 fun SettingsTab(draft: SettingsDraft = viewModel()) {
     val context = LocalContext.current
     val saved by ConfigStore.config.collectAsStateWithLifecycle()
-    val recentChats by AppState.recentChats.collectAsStateWithLifecycle()
+    val mattermostServer by AppState.mattermostServer.collectAsStateWithLifecycle()
     var dialogText by remember { mutableStateOf<String?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -112,32 +113,35 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
         }
 
         Section("Чаты Telegram")
-        OutlinedTextField(
+        TargetsEditor(
+            source = Source.TELEGRAM,
             value = draft.chats,
             onValueChange = { draft.chats = it },
-            label = { Text("Названия чатов, по одному в строке") },
-            supportingText = { Text("Точно как в шапке чата в Telegram (регистр не важен)") },
-            minLines = 2,
-            modifier = Modifier.fillMaxWidth(),
+            label = "Названия чатов, по одному в строке",
+            hint = "Точно как в шапке чата в Telegram (регистр не важен)",
+            emptyHint = "Замеченных чатов пока нет. Выдайте доступ к уведомлениям и дождитесь любого " +
+                "сообщения в Telegram — чат появится здесь.",
+            normalize = AppConfig::normalizeChatName,
+            onAdd = { draft.addChat(Source.TELEGRAM, it) },
         )
-        val draftChats = draft.chats.split('\n').map { AppConfig.normalizeChatName(it) }.toSet()
-        val suggestions = recentChats.filter { AppConfig.normalizeChatName(it) !in draftChats }
-        if (recentChats.isEmpty()) {
-            Text(
-                "Замеченных чатов пока нет. Выдайте доступ к уведомлениям и дождитесь любого " +
-                    "сообщения в Telegram — чат появится здесь.",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        } else if (suggestions.isNotEmpty()) {
-            Text("Замеченные чаты — нажмите, чтобы добавить:", style = MaterialTheme.typography.bodySmall)
-            suggestions.forEach { name ->
-                TextButton(onClick = { draft.addChat(name) }) { Text("+ $name") }
-            }
-        }
+
+        Section("Каналы Mattermost")
+        TargetsEditor(
+            source = Source.MATTERMOST,
+            value = draft.mattermostChannels,
+            onValueChange = { draft.mattermostChannels = it },
+            label = "Названия каналов, по одному в строке",
+            hint = "Как в списке каналов, например zabbix (регистр и «~» не важны)",
+            emptyHint = "Замеченных каналов пока нет. В Mattermost у канала должны быть включены " +
+                "мобильные уведомления обо всех сообщениях — после первого сообщения канал появится здесь.",
+            normalize = AppConfig::normalizeMattermostChannel,
+            onAdd = { draft.addChat(Source.MATTERMOST, it) },
+        )
 
         Section("Паттерны")
         Text(
-            "Регулярные выражения, по одному в строке, регистр не важен. Сначала проверяются " +
+            "Общие для Telegram и Mattermost. " +
+                "Регулярные выражения, по одному в строке, регистр не важен. Сначала проверяются " +
                 "ignore_patterns. В отличие от config.json, обратный слэш здесь пишется один раз: " +
                 "\\bDOWN\\b, а не \\\\bDOWN\\\\b.",
             style = MaterialTheme.typography.bodySmall,
@@ -210,14 +214,27 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
         OutlinedTextField(
             value = draft.checkUrl,
             onValueChange = { draft.checkUrl = it },
-            label = { Text("Адрес для проверки (check_url)") },
+            label = { Text("Telegram: адрес для проверки (check_url)") },
+            supportingText = { Text("Пусто — связь с Telegram не проверять") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedTextField(
+            value = draft.mattermostUrl,
+            onValueChange = { draft.mattermostUrl = it },
+            label = { Text("Mattermost: адрес сервера (mattermost_check_url)") },
+            placeholder = { Text("https://mattermost.example.com") },
+            supportingText = { Text("Пусто — связь с Mattermost не проверять") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        mattermostServer?.takeIf { it.trimEnd('/') != draft.mattermostUrl.trim().trimEnd('/') }?.let { url ->
+            TextButton(onClick = { draft.mattermostUrl = url }) { Text("Подставить сервер из уведомлений: $url") }
+        }
         SwitchRow("Не давать телефону засыпать (keep_cpu_awake)", draft.keepCpuAwake) { draft.keepCpuAwake = it }
         Text(
             "Без этого в глубоком сне (экран выключен, телефон не на зарядке и лежит неподвижно) " +
-                "проверки связи приостанавливаются. Сообщения Telegram при этом всё равно приходят. " +
+                "проверки связи приостанавливаются. Сообщения при этом всё равно приходят. " +
                 "Включение заметно увеличит расход батареи.",
             style = MaterialTheme.typography.bodySmall,
         )
@@ -227,6 +244,15 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             value = draft.packages,
             onValueChange = { draft.packages = it },
             label = { Text("Пакеты приложений Telegram, по одному в строке") },
+            textStyle = mono,
+            minLines = 2,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedTextField(
+            value = draft.mattermostPackages,
+            onValueChange = { draft.mattermostPackages = it },
+            label = { Text("Пакеты приложений Mattermost, по одному в строке") },
+            supportingText = { Text("Если у вас корпоративная сборка Mattermost — допишите её пакет") },
             textStyle = mono,
             minLines = 2,
             modifier = Modifier.fillMaxWidth(),
@@ -243,8 +269,8 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             OutlinedButton(onClick = { exportLauncher.launch("config.json") }) { Text("Экспорт") }
         }
         TextButton(onClick = {
-            // Чаты оставляем, остальное — как в исходном config.json.
-            draft.load(AppConfig(targetChats = saved.targetChats))
+            // Чаты и каналы оставляем, остальное — как в исходном config.json.
+            draft.load(AppConfig(targetChats = saved.targetChats, mattermostChannels = saved.mattermostChannels))
             Toast.makeText(context, "Стандартные значения в форме — нажмите «Сохранить»", Toast.LENGTH_LONG).show()
         }) { Text("Сбросить к стандартным") }
     }
@@ -255,6 +281,39 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             confirmButton = { TextButton(onClick = { dialogText = null }) { Text("OK") } },
             text = { Text(text) },
         )
+    }
+}
+
+/** Поле со списком чатов/каналов и кнопками «+ замеченный чат». */
+@Composable
+private fun TargetsEditor(
+    source: Source,
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    hint: String,
+    emptyHint: String,
+    normalize: (String) -> String,
+    onAdd: (String) -> Unit,
+) {
+    val recent by AppState.recentChats(source).collectAsStateWithLifecycle()
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        supportingText = { Text(hint) },
+        minLines = 2,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    val current = value.split('\n').map(normalize).toSet()
+    val suggestions = recent.filter { normalize(it) !in current }
+    if (recent.isEmpty()) {
+        Text(emptyHint, style = MaterialTheme.typography.bodySmall)
+    } else if (suggestions.isNotEmpty()) {
+        Text("Замеченные — нажмите, чтобы добавить:", style = MaterialTheme.typography.bodySmall)
+        suggestions.forEach { name ->
+            TextButton(onClick = { onAdd(name) }) { Text("+ $name") }
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import com.alertwatcher.config.AlertMatcher
 import com.alertwatcher.config.AppConfig
 import com.alertwatcher.config.ConfigStore
 import com.alertwatcher.config.ConnectionMonitorConfig
+import com.alertwatcher.config.Source
 
 /**
  * Черновик настроек на экране «Настройки». В ConfigStore попадает только по
@@ -16,6 +17,7 @@ import com.alertwatcher.config.ConnectionMonitorConfig
  */
 class SettingsDraft : ViewModel() {
     var chats by mutableStateOf("")
+    var mattermostChannels by mutableStateOf("")
     var alertPatterns by mutableStateOf("")
     var ignorePatterns by mutableStateOf("")
     var monitorEnabled by mutableStateOf(true)
@@ -24,11 +26,13 @@ class SettingsDraft : ViewModel() {
     var failThreshold by mutableStateOf("")
     var realertInterval by mutableStateOf("")
     var checkUrl by mutableStateOf("")
+    var mattermostUrl by mutableStateOf("")
     var keepCpuAwake by mutableStateOf(false)
     var maxVolume by mutableStateOf(true)
     var vibrate by mutableStateOf(true)
     var soundUri by mutableStateOf<String?>(null)
     var packages by mutableStateOf("")
+    var mattermostPackages by mutableStateOf("")
     var errors by mutableStateOf<List<String>>(emptyList())
     var testText by mutableStateOf("")
 
@@ -38,6 +42,7 @@ class SettingsDraft : ViewModel() {
 
     fun load(cfg: AppConfig) {
         chats = cfg.targetChats.joinToString("\n")
+        mattermostChannels = cfg.mattermostChannels.joinToString("\n")
         alertPatterns = cfg.alertPatterns.joinToString("\n")
         ignorePatterns = cfg.ignorePatterns.joinToString("\n")
         val cm = cfg.connectionMonitor
@@ -47,11 +52,13 @@ class SettingsDraft : ViewModel() {
         failThreshold = cm.failThreshold.toString()
         realertInterval = cm.realertIntervalSec.toString()
         checkUrl = cm.checkUrl
+        mattermostUrl = cm.mattermostUrl
         keepCpuAwake = cm.keepCpuAwake
         maxVolume = cfg.maxVolume
         vibrate = cfg.vibrate
         soundUri = cfg.soundUri
         packages = cfg.telegramPackages.joinToString("\n")
+        mattermostPackages = cfg.mattermostPackages.joinToString("\n")
         errors = emptyList()
     }
 
@@ -67,13 +74,15 @@ class SettingsDraft : ViewModel() {
             checkTimeoutSec = number(checkTimeout, "check_timeout_sec"),
             failThreshold = number(failThreshold, "fail_threshold"),
             realertIntervalSec = number(realertInterval, "realert_interval_sec"),
-            checkUrl = checkUrl.trim(),
+            checkUrl = withScheme(checkUrl),
+            mattermostUrl = withScheme(mattermostUrl),
             keepCpuAwake = keepCpuAwake,
         )
         if (errs.isEmpty()) errs += cm.validate()
 
         val cfg = AppConfig(
             targetChats = lines(chats),
+            mattermostChannels = lines(mattermostChannels),
             alertPatterns = lines(alertPatterns),
             ignorePatterns = lines(ignorePatterns),
             connectionMonitor = cm,
@@ -81,11 +90,15 @@ class SettingsDraft : ViewModel() {
             maxVolume = maxVolume,
             vibrate = vibrate,
             telegramPackages = lines(packages),
+            mattermostPackages = lines(mattermostPackages),
         )
         errs += AlertMatcher.validate(cfg.alertPatterns)
         errs += AlertMatcher.validate(cfg.ignorePatterns)
         if (cfg.alertPatterns.isEmpty()) errs += "alert_patterns пуст — алерты не будут срабатывать"
-        if (cfg.telegramPackages.isEmpty()) errs += "Список пакетов Telegram пуст"
+        if (cfg.targetChats.isNotEmpty() && cfg.telegramPackages.isEmpty()) errs += "Список пакетов Telegram пуст"
+        if (cfg.mattermostChannels.isNotEmpty() && cfg.mattermostPackages.isEmpty()) {
+            errs += "Список пакетов Mattermost пуст"
+        }
         return (if (errs.isEmpty()) cfg else null) to errs
     }
 
@@ -95,20 +108,36 @@ class SettingsDraft : ViewModel() {
         errors = errs
         if (cfg == null) return false
         ConfigStore.save(cfg)
+        load(cfg)  // показать адреса уже с https://
         return true
     }
 
     fun hasChanges(): Boolean = build().first != ConfigStore.config.value
 
-    fun addChat(name: String) {
-        if (lines(chats).any { AppConfig.normalizeChatName(it) == AppConfig.normalizeChatName(name) }) return
-        chats = (lines(chats) + name).joinToString("\n")
+    fun addChat(source: Source, name: String) {
+        when (source) {
+            Source.TELEGRAM -> {
+                if (lines(chats).any { AppConfig.normalizeChatName(it) == AppConfig.normalizeChatName(name) }) return
+                chats = (lines(chats) + name).joinToString("\n")
+            }
+            Source.MATTERMOST -> {
+                val n = AppConfig.normalizeMattermostChannel(name)
+                if (lines(mattermostChannels).any { AppConfig.normalizeMattermostChannel(it) == n }) return
+                mattermostChannels = (lines(mattermostChannels) + name).joinToString("\n")
+            }
+        }
     }
 
     /** Для поля «Проверить текст»: матчер по НЕсохранённым паттернам из формы. */
     fun testMatcher(): AlertMatcher = AlertMatcher.build(
         AppConfig(alertPatterns = lines(alertPatterns), ignorePatterns = lines(ignorePatterns))
     )
+
+    /** «mattermost.company.ru» → «https://mattermost.company.ru». */
+    private fun withScheme(url: String): String {
+        val u = url.trim()
+        return if (u.isEmpty() || u.contains("://")) u else "https://$u"
+    }
 
     private fun lines(text: String): List<String> =
         text.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
