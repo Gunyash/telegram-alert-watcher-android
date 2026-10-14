@@ -14,7 +14,9 @@ class AlertMatcher private constructor(
         data object NoMatch : Verdict
     }
 
-    fun check(text: String): Verdict {
+    /** Текст перед проверкой нормализуется: см. [TextNormalizer.forMatching]. */
+    fun check(rawText: String): Verdict {
+        val text = TextNormalizer.forMatching(rawText)
         if (text.isEmpty()) return Verdict.NoMatch
         ignore.firstOrNull { it.matcher(text).find() }?.let { return Verdict.Ignored(it.pattern()) }
         alert.firstOrNull { it.matcher(text).find() }?.let { return Verdict.Alert(it.pattern()) }
@@ -47,8 +49,11 @@ class AlertMatcher private constructor(
             null
         }
 
-        /** Синтаксис именованных групп Python (?P<name>…) / (?P=name) → Java. */
-        private fun fromPython(p: String): String = p
+        /**
+         * Синтаксис именованных групп Python (?P<name>…) / (?P=name) → Java; заодно
+         * пробелы и невидимые символы приводятся к тому же виду, что и текст сообщения.
+         */
+        private fun fromPython(p: String): String = TextNormalizer.forPattern(p)
             .replace("(?P<", "(?<")
             .replace(Regex("""\(\?P=(\w+)\)""")) { "\\k<${it.groupValues[1]}>" }
     }

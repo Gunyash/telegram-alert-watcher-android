@@ -159,6 +159,7 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
         )
+        DoubleEscapeWarning(draft.alertPatterns)
         OutlinedTextField(
             value = draft.ignorePatterns,
             onValueChange = { draft.ignorePatterns = it },
@@ -166,6 +167,12 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             textStyle = mono,
             minLines = 4,
             modifier = Modifier.fillMaxWidth(),
+        )
+        DoubleEscapeWarning(draft.ignorePatterns)
+        Text(
+            "Пробелы и переносы строк в сообщении считаются одинаковыми, а невидимые символы " +
+                "(неразрывный пробел и т.п.) не учитываются — поэтому в паттернах достаточно обычного пробела.",
+            style = MaterialTheme.typography.bodySmall,
         )
         OutlinedTextField(
             value = draft.testText,
@@ -329,6 +336,21 @@ private fun TargetsEditor(
             TextButton(onClick = { onAdd(name) }) { Text("+ $name") }
         }
     }
+}
+
+/** «\\s», «\\b», «\\.» и т.п. — паттерн вставили в том виде, как он записан в config.json. */
+private val DOUBLE_ESCAPE = Regex("""\\\\[sSbBdDwW.()\[\]{}|+*?]""")
+
+@Composable
+private fun DoubleEscapeWarning(patterns: String) {
+    val lines = patterns.split('\n').filter { DOUBLE_ESCAPE.containsMatchIn(it) }
+    if (lines.isEmpty()) return
+    Text(
+        "Похоже, паттерн записан как в config.json — с двойным обратным слэшем (\\\\s, \\\\b, \\\\.). " +
+            "Здесь слэш пишется один раз: \\s, \\b, \\. — иначе паттерн не совпадёт. Строк с такой записью: ${lines.size}.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+    )
 }
 
 @Composable

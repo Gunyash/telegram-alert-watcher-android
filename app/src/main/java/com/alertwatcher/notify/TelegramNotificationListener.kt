@@ -11,6 +11,7 @@ import com.alertwatcher.alarm.AlarmEvent
 import com.alertwatcher.config.AlertMatcher
 import com.alertwatcher.config.ConfigStore
 import com.alertwatcher.config.Source
+import com.alertwatcher.config.TextNormalizer
 import com.alertwatcher.service.WatcherService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -90,7 +91,9 @@ class TelegramNotificationListener : NotificationListenerService() {
             // Из Mattermost текст приходит в сыром Markdown («#my\_host\_01») — приводим
             // к виду, как в Telegram, чтобы работали одни и те же паттерны.
             val text = if (source == Source.MATTERMOST) MarkdownText.unescape(msg.text) else msg.text
-            AppLog.log("[${source.title} · ${parsed.chatTitle}] ${text.take(200).replace('\n', ' ')}")
+            AppLog.log("[${source.title} · ${parsed.chatTitle}] ${TextNormalizer.forLog(text.take(500))}")
+            // Невидимые символы на экране не отличить от обычных — перечисляем их явно.
+            TextNormalizer.oddChars(text)?.let { AppLog.log("   особые символы в тексте (учтены как пробелы/убраны): $it") }
             when (val verdict = ConfigStore.matcher().check(text)) {
                 is AlertMatcher.Verdict.Alert -> {
                     AppLog.log("!!! АЛЕРТ ОБНАРУЖЕН !!! (паттерн ${verdict.pattern})")

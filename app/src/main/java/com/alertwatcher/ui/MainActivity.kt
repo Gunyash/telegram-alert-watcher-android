@@ -23,6 +23,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -64,10 +65,20 @@ fun AppTheme(content: @Composable () -> Unit) {
 private fun MainScreen() {
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val titles = listOf("Статус", "Настройки", "Журнал")
+    val context = LocalContext.current
+    // Номер версии в заголовке — чтобы сразу было видно, обновилось ли приложение.
+    val version = remember {
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     Column(Modifier.fillMaxSize().safeDrawingPadding()) {
         Text(
-            "Alert Watcher",
+            "Alert Watcher" + (version?.let { " $it" } ?: ""),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
