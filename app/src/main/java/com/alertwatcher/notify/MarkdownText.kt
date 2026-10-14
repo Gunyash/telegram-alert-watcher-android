@@ -10,6 +10,9 @@ object MarkdownText {
     // Обратный слэш перед любым из символов, которые Markdown позволяет экранировать.
     private val ESCAPED = Regex("""\\([\\`*_{}\[\]()#+\-.!|~<>])""")
 
-    /** «#my\_host\_01» → «#my_host_01»; «\\» → «\». */
-    fun unescape(text: String): String = text.replace(ESCAPED, "$1")
+    // «**жирный**» — Zabbix так выделяет заголовок. Экранированные «\*» не трогаем.
+    private val BOLD = Regex("""(?<!\\)\*\*""")
+
+    /** «**Заголовок**» → «Заголовок»; «#my\_host\_01» → «#my_host_01»; «\\» → «\». */
+    fun unescape(text: String): String = text.replace(BOLD, "").replace(ESCAPED, "$1")
 }
