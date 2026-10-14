@@ -87,7 +87,7 @@ class TelegramNotificationListener : NotificationListenerService() {
             newCount++
             if (quiet) continue
 
-            // Из Mattermost текст приходит в сыром Markdown («#ROLF\_PT\_Core») — приводим
+            // Из Mattermost текст приходит в сыром Markdown («#my\_host\_01») — приводим
             // к виду, как в Telegram, чтобы работали одни и те же паттерны.
             val text = if (source == Source.MATTERMOST) MarkdownText.unescape(msg.text) else msg.text
             AppLog.log("[${source.title} · ${parsed.chatTitle}] ${text.take(200).replace('\n', ' ')}")
