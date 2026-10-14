@@ -87,8 +87,11 @@ class TelegramNotificationListener : NotificationListenerService() {
             newCount++
             if (quiet) continue
 
-            AppLog.log("[${source.title} · ${parsed.chatTitle}] ${msg.text.take(200).replace('\n', ' ')}")
-            when (val verdict = ConfigStore.matcher().check(msg.text)) {
+            // Из Mattermost текст приходит в сыром Markdown («#ROLF\_PT\_Core») — приводим
+            // к виду, как в Telegram, чтобы работали одни и те же паттерны.
+            val text = if (source == Source.MATTERMOST) MarkdownText.unescape(msg.text) else msg.text
+            AppLog.log("[${source.title} · ${parsed.chatTitle}] ${text.take(200).replace('\n', ' ')}")
+            when (val verdict = ConfigStore.matcher().check(text)) {
                 is AlertMatcher.Verdict.Alert -> {
                     AppLog.log("!!! АЛЕРТ ОБНАРУЖЕН !!! (паттерн ${verdict.pattern})")
                     AlarmController.trigger(
@@ -96,7 +99,7 @@ class TelegramNotificationListener : NotificationListenerService() {
                         AlarmEvent.message(
                             source = source.title,
                             chat = parsed.chatTitle,
-                            text = msg.text,
+                            text = text,
                             sentAt = msg.timestamp,
                         ),
                     )

@@ -44,6 +44,7 @@ import com.alertwatcher.config.AlertMatcher
 import com.alertwatcher.config.AppConfig
 import com.alertwatcher.config.ConfigStore
 import com.alertwatcher.config.Source
+import com.alertwatcher.notify.MarkdownText
 
 @Composable
 fun SettingsTab(draft: SettingsDraft = viewModel()) {
@@ -170,13 +171,15 @@ fun SettingsTab(draft: SettingsDraft = viewModel()) {
             value = draft.testText,
             onValueChange = { draft.testText = it },
             label = { Text("Проверить текст сообщения") },
-            supportingText = { Text("Вставьте текст алерта — увидите, сработает ли он") },
+            supportingText = {
+                Text("Вставьте текст алерта из Telegram или Mattermost — увидите, сработает ли он (экранирование вроде «\\_» убирается)")
+            },
             minLines = 2,
             modifier = Modifier.fillMaxWidth(),
         )
         if (draft.testText.isNotBlank()) {
             val verdict = remember(draft.testText, draft.alertPatterns, draft.ignorePatterns) {
-                draft.testMatcher().check(draft.testText)
+                draft.testMatcher().check(MarkdownText.unescape(draft.testText))
             }
             Text(
                 when (verdict) {
